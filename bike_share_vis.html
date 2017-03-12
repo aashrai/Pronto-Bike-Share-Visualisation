@@ -71,67 +71,115 @@
                 "trip_id": d['trip_id']
             }
             return obj
-        }, function(data) {
+        }, function(originalData) {
+
             line = d3.svg.line()
-            g.selectAll("line").data(data).enter().append("path")
+            g.selectAll("line").data(originalData).enter().append("path")
                 .attr("d", function(d) {
                     return line([
                         [d["from_point"].x, d["from_point"].y],
                         [d["to_point"].x, d["to_point"].y]
                     ])
                 })
-                .attr("id", function(d){ return "line" + data.indexOf(d) })
+                .attr("id", function(d) {
+                    return "line" + originalData.indexOf(d)
+                })
                 .style("opacity", "0")
 
-            var timeExtent = d3.extent(data, function(d){
-              return d['starttime']
-            });
-            var timeRangeFactor = (2*60*1000)/(24*60*60*1000)
-            var timeDomain = [timeExtent[0], timeExtent[1]];
-            var timeRangeHigh = Math.abs(timeExtent[1]-timeExtent[0])*timeRangeFactor
-            var timeRange = d3.time.scale.utc().domain(timeDomain).range([0,timeRangeHigh]);
+            var totalAnimationTime = 60*1000
+            var timeRangeFactor = totalAnimationTime / (24 * 60 * 60 * 1000)
+            var progressBarWidth = 300
+            var progressControllerWidth = 10;
 
-            var timeTicks = timeRange.ticks(d3.time.minute, 5)
-            var timeText = svg.append("text").attr("x",20).attr("y",50);
+            svg.append("rect").attr("x", 20).attr("y", 20)
+                .attr("width", progressBarWidth)
+                .attr("height", 10).style("fill", "orange")
+            var progressController = svg.append("rect").attr("x", 20).attr("y", 15)
+                .attr("width", progressBarWidth).attr("height", 20)
+                .style("fill", "gray")
+                .attr("id", "progressController");
 
-            var progressBarWidth = 300;
-            var progressControllerRange = d3.time.scale.utc().domain(timeDomain)
-            .range([0,progressBarWidth]);
-            var progressControllerTicks = progressControllerRange
-            .ticks(d3.time.minute, 5);
+            function getProgressControllerRange(startX, timeDomain) {
+                return d3.time.scale.utc().domain(timeDomain)
+                    .range([startX, progressBarWidth]);
+            }
 
-            svg.append("rect").attr("x",20).attr("y",20)
-            .attr("width",progressBarWidth)
-            .attr("height",10).style("fill","orange")
-            var progressController = svg.append("rect").attr("x",20).attr("y",15)
-            .attr("width",10).attr("height",20).style("fill","gray");
+            function getTimeDomain(data) {
+                var timeExtent = d3.extent(data, function(d) {
+                    return d['starttime']
+                });
+                var timeDomain = [timeExtent[0], timeExtent[1]];
+                return timeDomain
+            }
 
-            progressControllerTicks.forEach(function(d){
-              progressController.transition().duration(300).delay(timeRange(d))
-              .attr("transform","translate("+progressControllerRange(d)+")")
-            })
-            timeTicks.forEach(function(d){
-              timeText.transition().duration(100)
-              .delay(timeRange(d)).text(d)
-            })
+            function animateData(data) {
+                var timeDomain = getTimeDomain(data)
+                var timeRangeHigh = Math.abs(timeDomain[1] - timeDomain[0]) * timeRangeFactor
+                var timeRange = d3.time.scale.utc().domain(timeDomain).range([0, timeRangeHigh]);
+                var timeTicks = timeRange.ticks(d3.time.minute, 5)
+                var timeText = svg.append("text").attr("x", 20).attr("y", 50);
 
-            data.forEach(function(d,i) {
-                var totalLength = d3.select("#line" + i).node().getTotalLength();
+                var progressControllerRange = getProgressControllerRange(progressController.attr("x"), timeDomain);
+                var progressControllerTicks = progressControllerRange
+                    .ticks(d3.time.minute, 5);
 
-                d3.select("#line" + i).attr("stroke-dasharray", totalLength + " " + totalLength)
-                    .attr("stroke-dashoffset", totalLength)
-                    .style("opacity", "1")
-                    .style("stroke", "steelblue")
-                    .transition()
-                    .duration(1000)
-                    .delay(timeRange(d['starttime']))
-                    .ease("quad")
-                    .attr("stroke-dashoffset", 0)
-                    .style("stroke-width", 1)
-                    .transition()
-                    .duration(300)
-                    .style("opacity", 0)
-            })
+                progressControllerTicks.forEach(function(d) {
+                    progressController.transition().duration(300).delay(timeRange(d))
+                        .attr("x",  progressControllerRange(d)+progressBarWidth)
+                })
+                timeTicks.forEach(function(d) {
+                    timeText.transition().duration(100)
+                        .delay(timeRange(d)).text(d)
+                })
+
+                data.forEach(function(d) {
+                    var selectionString = "#line" + originalData.indexOf(d)
+                    var totalLength = d3.select(selectionString).node().getTotalLength();
+
+                    d3.select(selectionString).attr("stroke-dasharray", totalLength + " " + totalLength)
+                        .attr("stroke-dashoffset", totalLength)
+                        .style("opacity", "1")
+                        .style("stroke", "steelblue")
+                        .transition()
+                        .duration(1000)
+                        .delay(timeRange(d['starttime']))
+                        .ease("quad")
+                        .attr("stroke-dashoffset", 0)
+                        .style("stroke-width", 1)
+                        .transition()
+                        .duration(300)
+                        .style("opacity", 0)
+                })
+            }
+
+            animateData(originalData)
+
+            function clampDragValue(drag) {
+                if (drag < 20)
+                    return 20;
+                return d3.min([d3.event.x, progressBarWidth + progressControllerWidth]);
+            }
+
+            setTimeout(function() {
+                dragBehavior = d3.behavior.drag();
+                progressController = d3.selectAll("#progressController");
+                dragBehavior.on("dragstart", function() {
+                    d3.event.sourceEvent.stopPropagation();
+                });
+                dragBehavior.on("drag", function() {
+                    progressController.attr("x", clampDragValue(d3.event.x))
+                })
+                dragBehavior.on("dragend", function() {
+                    var progressRangeFull = getProgressControllerRange(0,getTimeDomain(originalData));
+                    var minDate = progressRangeFull.invert([progressController.attr("x")])
+                    var filteredData = originalData.filter(function(d) {
+                        return d['starttime'].getTime() > minDate.getTime();
+                    });
+                    animateData(filteredData)
+
+                })
+                progressController.call(dragBehavior)
+            }, totalAnimationTime)
         })
     </script>
 </body>
