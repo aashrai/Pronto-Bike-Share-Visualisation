@@ -1,29 +1,29 @@
 import csv
 
-# stations = {}
-# reader = csv.reader(open("station.csv","rb"))
-# reader.next()
-# for row in reader:
-# 	stations[row[0]]={'lat':row[2],'long':row[3]}
+stations = {}
+reader = csv.reader(open("station.csv","rb"))
+reader.next()
+for row in reader:
+	stations[row[0]]={'lat':row[2],'long':row[3]}
 
-# reader = csv.reader(open("trip.csv","rb"))
-# writer = csv.writer(open("trip_out.csv","w"))
-# row0 = reader.next()
-# row0.append("from_station_lat")
-# row0.append("from_station_long")
-# row0.append("to_station_lat")
-# row0.append("to_station_long")
-# writer.writerow(row0)
+reader = csv.reader(open("trip.csv","rb"))
+writer = csv.writer(open("trip_out.csv","w"))
+row0 = reader.next()
+row0.append("from_station_lat")
+row0.append("from_station_long")
+row0.append("to_station_lat")
+row0.append("to_station_long")
+writer.writerow(row0)
 
-# for row in reader:
-# 	try:
-# 		row.append(stations[row[7]]['lat'])
-# 		row.append(stations[row[7]]['long'])
-# 		row.append(stations[row[8]]['lat'])
-# 		row.append(stations[row[8]]['long'])
-# 		writer.writerow(row)
-# 	except:
-# 		print "skipping row"
+for row in reader:
+	try:
+		row.append(stations[row[7]]['lat'])
+		row.append(stations[row[7]]['long'])
+		row.append(stations[row[8]]['lat'])
+		row.append(stations[row[8]]['long'])
+		writer.writerow(row)
+	except:
+		print "skipping row"
 
 
 f = open("trip_out.csv","r");

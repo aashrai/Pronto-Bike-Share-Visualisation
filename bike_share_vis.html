@@ -8,6 +8,7 @@
     <script src="http://d3js.org/d3.v3.min.js" type="text/javascript"></script>
     <script src="http://cdn.leafletjs.com/leaflet-0.7/leaflet.js"></script>
     <script src='https://api.tiles.mapbox.com/mapbox.js/v1.6.4/mapbox.js'></script>
+    <script src="http://cdn.jsdelivr.net/jstat/1.5.2/jstat.min.js"></script>
     <style>
         html,
         body {
@@ -22,6 +23,10 @@
         #map {
             width: 100%;
             height: 100%;
+        }
+
+        .axis {
+            stroke-width: 1;
         }
     </style>
 </head>
@@ -74,7 +79,9 @@
         }, function(originalData) {
 
             line = d3.svg.line()
-            g.selectAll("line").data(originalData).enter().append("path")
+            g.selectAll("path").data(originalData, function(d, i) {
+                    return i;
+                }).enter().append("path")
                 .attr("d", function(d) {
                     return line([
                         [d["from_point"].x, d["from_point"].y],
@@ -86,22 +93,74 @@
                 })
                 .style("opacity", "0")
 
-            var totalAnimationTime = 60*1000
+            var totalAnimationTime = 1000
             var timeRangeFactor = totalAnimationTime / (24 * 60 * 60 * 1000)
             var progressBarWidth = 300
             var progressControllerWidth = 10;
 
-            svg.append("rect").attr("x", 20).attr("y", 20)
-                .attr("width", progressBarWidth)
-                .attr("height", 10).style("fill", "orange")
-            var progressController = svg.append("rect").attr("x", 20).attr("y", 15)
-                .attr("width", progressBarWidth).attr("height", 20)
+            var chartHeight = 100
+            var xAxisFormat = d3.time.format("%I:%M")
+            var x = d3.time.scale().range([0, progressBarWidth])
+            var y = d3.scale.linear().range([chartHeight, 0])
+            var xAxis = d3.svg.axis().scale(x).orient("bottom").tickFormat(xAxisFormat)
+            var yAxis = d3.svg.axis().scale(y).orient("left")
+
+            var chart = svg.append("g")
+                .attr("width", progressBarWidth + 40).attr("height", chartHeight + 40)
+                .append("g").attr("transform", "translate(40,20)");
+
+            var timeExtent = d3.extent(originalData, function(d) {
+                return d['starttime'];
+            })
+            var timeBins = d3.time.hours(d3.time.hour.offset(timeExtent[0], -1),
+                d3.time.hour.offset(timeExtent[1], 1));
+            var binByHour = d3.layout.histogram().value(function(d) {
+                return d['starttime'];
+            }).bins(timeBins)
+            var histData = binByHour(originalData)
+            x.domain(d3.extent(timeBins))
+            y.domain([0, d3.max(histData, function(d) {
+                return d.y;
+            })])
+            chart.selectAll(".bar").data(histData).enter().append("rect")
+                .style("fill", "steelblue").attr("x", function(d) {
+                    return x(d.x)
+                })
+                .attr("width", 10).attr("y", function(d) {
+                    return y(d.y)
+                })
+                .attr("height", function(d) {
+                    return chartHeight - y(d.y)
+                })
+
+            chart.append('g')
+                .attr("transform", "translate(0," + (chartHeight) + ")")
+                .call(xAxis)
+                .select("path")
+                .attr("class", "axis")
+                .attr("stroke", "black")
+                .attr("fill", "none");
+
+            chart.append("g")
+                .attr("transform", "translate(0,0)")
+                .call(yAxis)
+                .select("path")
+                .attr("class", "axis")
+                .attr("stroke", "black")
+                .attr("fill", "none");
+
+            chart.selectAll(".tick").select("line").attr("stroke-width", 1)
+                .attr("stroke", "black")
+
+            var progressController = svg.append("rect").attr("x", 40)
+                .attr("y", chartHeight + 10)
+                .attr("width", progressControllerWidth).attr("height", 20)
                 .style("fill", "gray")
                 .attr("id", "progressController");
 
             function getProgressControllerRange(startX, timeDomain) {
                 return d3.time.scale.utc().domain(timeDomain)
-                    .range([startX, progressBarWidth]);
+                    .range([startX, progressBarWidth + 40 - progressControllerWidth]);
             }
 
             function getTimeDomain(data) {
@@ -116,8 +175,6 @@
                 var timeDomain = getTimeDomain(data)
                 var timeRangeHigh = Math.abs(timeDomain[1] - timeDomain[0]) * timeRangeFactor
                 var timeRange = d3.time.scale.utc().domain(timeDomain).range([0, timeRangeHigh]);
-                var timeTicks = timeRange.ticks(d3.time.minute, 5)
-                var timeText = svg.append("text").attr("x", 20).attr("y", 50);
 
                 var progressControllerRange = getProgressControllerRange(progressController.attr("x"), timeDomain);
                 var progressControllerTicks = progressControllerRange
@@ -125,11 +182,7 @@
 
                 progressControllerTicks.forEach(function(d) {
                     progressController.transition().duration(300).delay(timeRange(d))
-                        .attr("x",  progressControllerRange(d)+progressBarWidth)
-                })
-                timeTicks.forEach(function(d) {
-                    timeText.transition().duration(100)
-                        .delay(timeRange(d)).text(d)
+                        .attr("x", progressControllerRange(d) + progressControllerWidth)
                 })
 
                 data.forEach(function(d) {
@@ -141,7 +194,7 @@
                         .style("opacity", "1")
                         .style("stroke", "steelblue")
                         .transition()
-                        .duration(1000)
+                        .duration(500)
                         .delay(timeRange(d['starttime']))
                         .ease("quad")
                         .attr("stroke-dashoffset", 0)
@@ -155,9 +208,9 @@
             animateData(originalData)
 
             function clampDragValue(drag) {
-                if (drag < 20)
-                    return 20;
-                return d3.min([d3.event.x, progressBarWidth + progressControllerWidth]);
+                if (drag < 40)
+                    return 40;
+                return d3.min([d3.event.x, progressBarWidth + 40]);
             }
 
             setTimeout(function() {
@@ -168,18 +221,18 @@
                 });
                 dragBehavior.on("drag", function() {
                     progressController.attr("x", clampDragValue(d3.event.x))
-                })
-                dragBehavior.on("dragend", function() {
-                    var progressRangeFull = getProgressControllerRange(0,getTimeDomain(originalData));
+                    var progressRangeFull = getProgressControllerRange(0, getTimeDomain(originalData));
                     var minDate = progressRangeFull.invert([progressController.attr("x")])
                     var filteredData = originalData.filter(function(d) {
-                        return d['starttime'].getTime() > minDate.getTime();
+                        return Math.abs(d['starttime'].getTime() - minDate.getTime()) <= 5 * 60 * 1000;
                     });
-                    animateData(filteredData)
-
-                })
+                    g.selectAll("path").style("opacity", 0);
+                    filteredData.forEach(function(d) {
+                        g.select("#line" + originalData.indexOf(d)).style("opacity", 1)
+                    })
+                });
                 progressController.call(dragBehavior)
-            }, totalAnimationTime)
+            }, totalAnimationTime + 1000)
         })
     </script>
 </body>
