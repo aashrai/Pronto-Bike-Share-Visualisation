@@ -8,7 +8,6 @@
     <script src="http://d3js.org/d3.v3.min.js" type="text/javascript"></script>
     <script src="http://cdn.leafletjs.com/leaflet-0.7/leaflet.js"></script>
     <script src='https://api.tiles.mapbox.com/mapbox.js/v1.6.4/mapbox.js'></script>
-    <script src="http://cdn.jsdelivr.net/jstat/1.5.2/jstat.min.js"></script>
     <style>
         html,
         body {
@@ -44,196 +43,219 @@
             })
             .addLayer(mapboxTiles)
             .setView([47.635, -122.284], 13);
+        mapboxTiles.on("load", function() {
+            var options =["Weekday","Weekend"]
+            d3.select("#map")
+            .append("form")
+            .data(options)
+            .enter()
+            .append("input")
+            .attr("type","radio")
+            .text(function(d){
+              return d
+            })
+            setTimeout(function() {
+                drawStations();
+                drawPaths()
+            }, 600);
+        })
 
         /* Initialize the SVG layer */
         map._initPathRoot()
 
         /* We simply pick up the SVG from the map object */
         var svg = d3.select("#map").select("svg");
-        var g = svg.append("g").attr("class", "leaflet-zoom-hide");
+        var g = svg.append("g");
         var timeFormat = d3.time.format("%m/%d/%Y %H:%M");
 
-        d3.csv("station.csv", function(d) {
-            return {
-                "name": d['name'],
-                "point": map.latLngToLayerPoint(new L.LatLng(d["lat"], d["long"]))
-            }
-        }, function(data) {
-            g.selectAll("circle").data(data).enter().append("circle")
-                .attr("cx", function(d) {
-                    return d['point'].x;
-                }).attr("cy", function(d) {
-                    return d['point'].y;
-                }).attr("r", 2).style("fill", "orange")
-        })
-
-        d3.csv("trip_date_max.csv", function(d) {
-            var obj = {
-                "starttime": timeFormat.parse(d['starttime']),
-                "endtime": timeFormat.parse(d["stoptime"]),
-                "from_point": map.latLngToLayerPoint(new L.LatLng(d["from_station_lat"], d["from_station_long"])),
-                "to_point": map.latLngToLayerPoint(new L.LatLng(d["to_station_lat"], d["to_station_long"])),
-                "trip_id": d['trip_id']
-            }
-            return obj
-        }, function(originalData) {
-
-            line = d3.svg.line()
-            g.selectAll("path").data(originalData, function(d, i) {
-                    return i;
-                }).enter().append("path")
-                .attr("d", function(d) {
-                    return line([
-                        [d["from_point"].x, d["from_point"].y],
-                        [d["to_point"].x, d["to_point"].y]
-                    ])
-                })
-                .attr("id", function(d) {
-                    return "line" + originalData.indexOf(d)
-                })
-                .style("opacity", "0")
-
-            var totalAnimationTime = 1000
-            var timeRangeFactor = totalAnimationTime / (24 * 60 * 60 * 1000)
-            var progressBarWidth = 300
-            var progressControllerWidth = 10;
-
-            var chartHeight = 100
-            var xAxisFormat = d3.time.format("%I:%M")
-            var x = d3.time.scale().range([0, progressBarWidth])
-            var y = d3.scale.linear().range([chartHeight, 0])
-            var xAxis = d3.svg.axis().scale(x).orient("bottom").tickFormat(xAxisFormat)
-            var yAxis = d3.svg.axis().scale(y).orient("left")
-
-            var chart = svg.append("g")
-                .attr("width", progressBarWidth + 40).attr("height", chartHeight + 40)
-                .append("g").attr("transform", "translate(40,20)");
-
-            var timeExtent = d3.extent(originalData, function(d) {
-                return d['starttime'];
+        function drawStations() {
+            d3.csv("station.csv", function(d) {
+                return {
+                    "name": d['name'],
+                    "point": map.latLngToLayerPoint(new L.LatLng(d["lat"], d["long"]))
+                }
+            }, function(data) {
+                g.selectAll("circle").data(data).enter().append("circle")
+                    .attr("cx", function(d) {
+                        return d['point'].x;
+                    }).attr("cy", function(d) {
+                        return d['point'].y;
+                    }).attr("r", 2)
+                    .style("fill", "orange")
             })
-            var timeBins = d3.time.hours(d3.time.hour.offset(timeExtent[0], -1),
-                d3.time.hour.offset(timeExtent[1], 1));
-            var binByHour = d3.layout.histogram().value(function(d) {
-                return d['starttime'];
-            }).bins(timeBins)
-            var histData = binByHour(originalData)
-            x.domain(d3.extent(timeBins))
-            y.domain([0, d3.max(histData, function(d) {
-                return d.y;
-            })])
-            chart.selectAll(".bar").data(histData).enter().append("rect")
-                .style("fill", "steelblue").attr("x", function(d) {
-                    return x(d.x)
-                })
-                .attr("width", 10).attr("y", function(d) {
-                    return y(d.y)
-                })
-                .attr("height", function(d) {
-                    return chartHeight - y(d.y)
-                })
+        }
 
-            chart.append('g')
-                .attr("transform", "translate(0," + (chartHeight) + ")")
-                .call(xAxis)
-                .select("path")
-                .attr("class", "axis")
-                .attr("stroke", "black")
-                .attr("fill", "none");
+        function drawPaths() {
+            d3.csv("trip_date_max.csv", function(d) {
+                var obj = {
+                    "starttime": timeFormat.parse(d['starttime']),
+                    "endtime": timeFormat.parse(d["stoptime"]),
+                    "from_point": map.latLngToLayerPoint(new L.LatLng(d["from_station_lat"], d["from_station_long"])),
+                    "to_point": map.latLngToLayerPoint(new L.LatLng(d["to_station_lat"], d["to_station_long"])),
+                    "trip_id": d['trip_id']
+                }
+                return obj
+            }, function(originalData) {
 
-            chart.append("g")
-                .attr("transform", "translate(0,0)")
-                .call(yAxis)
-                .select("path")
-                .attr("class", "axis")
-                .attr("stroke", "black")
-                .attr("fill", "none");
-
-            chart.selectAll(".tick").select("line").attr("stroke-width", 1)
-                .attr("stroke", "black")
-
-            var progressController = svg.append("rect").attr("x", 40)
-                .attr("y", chartHeight + 10)
-                .attr("width", progressControllerWidth).attr("height", 20)
-                .style("fill", "gray")
-                .attr("id", "progressController");
-
-            function getProgressControllerRange(startX, timeDomain) {
-                return d3.time.scale.utc().domain(timeDomain)
-                    .range([startX, progressBarWidth + 40 - progressControllerWidth]);
-            }
-
-            function getTimeDomain(data) {
-                var timeExtent = d3.extent(data, function(d) {
-                    return d['starttime']
-                });
-                var timeDomain = [timeExtent[0], timeExtent[1]];
-                return timeDomain
-            }
-
-            function animateData(data) {
-                var timeDomain = getTimeDomain(data)
-                var timeRangeHigh = Math.abs(timeDomain[1] - timeDomain[0]) * timeRangeFactor
-                var timeRange = d3.time.scale.utc().domain(timeDomain).range([0, timeRangeHigh]);
-
-                var progressControllerRange = getProgressControllerRange(progressController.attr("x"), timeDomain);
-                var progressControllerTicks = progressControllerRange
-                    .ticks(d3.time.minute, 5);
-
-                progressControllerTicks.forEach(function(d) {
-                    progressController.transition().duration(300).delay(timeRange(d))
-                        .attr("x", progressControllerRange(d) + progressControllerWidth)
-                })
-
-                data.forEach(function(d) {
-                    var selectionString = "#line" + originalData.indexOf(d)
-                    var totalLength = d3.select(selectionString).node().getTotalLength();
-
-                    d3.select(selectionString).attr("stroke-dasharray", totalLength + " " + totalLength)
-                        .attr("stroke-dashoffset", totalLength)
-                        .style("opacity", "1")
-                        .style("stroke", "steelblue")
-                        .transition()
-                        .duration(500)
-                        .delay(timeRange(d['starttime']))
-                        .ease("quad")
-                        .attr("stroke-dashoffset", 0)
-                        .style("stroke-width", 1)
-                        .transition()
-                        .duration(300)
-                        .style("opacity", 0)
-                })
-            }
-
-            animateData(originalData)
-
-            function clampDragValue(drag) {
-                if (drag < 40)
-                    return 40;
-                return d3.min([d3.event.x, progressBarWidth + 40]);
-            }
-
-            setTimeout(function() {
-                dragBehavior = d3.behavior.drag();
-                progressController = d3.selectAll("#progressController");
-                dragBehavior.on("dragstart", function() {
-                    d3.event.sourceEvent.stopPropagation();
-                });
-                dragBehavior.on("drag", function() {
-                    progressController.attr("x", clampDragValue(d3.event.x))
-                    var progressRangeFull = getProgressControllerRange(0, getTimeDomain(originalData));
-                    var minDate = progressRangeFull.invert([progressController.attr("x")])
-                    var filteredData = originalData.filter(function(d) {
-                        return Math.abs(d['starttime'].getTime() - minDate.getTime()) <= 5 * 60 * 1000;
-                    });
-                    g.selectAll("path").style("opacity", 0);
-                    filteredData.forEach(function(d) {
-                        g.select("#line" + originalData.indexOf(d)).style("opacity", 1)
+                line = d3.svg.line()
+                g.selectAll("path").data(originalData, function(d, i) {
+                        return i;
+                    }).enter().append("path")
+                    .attr("d", function(d) {
+                        return line([
+                            [d["from_point"].x, d["from_point"].y],
+                            [d["to_point"].x, d["to_point"].y]
+                        ])
                     })
-                });
-                progressController.call(dragBehavior)
-            }, totalAnimationTime + 1000)
-        })
+                    .attr("id", function(d) {
+                        return "line" + originalData.indexOf(d)
+                    })
+                    .style("opacity", "0")
+
+                var totalAnimationTime = 60 * 1000
+                var timeRangeFactor = totalAnimationTime / (24 * 60 * 60 * 1000)
+                var progressBarWidth = 300
+                var progressControllerWidth = 10;
+
+                var chartHeight = 100
+                var xAxisFormat = d3.time.format("%I:%M")
+                var x = d3.time.scale().range([0, progressBarWidth])
+                var y = d3.scale.linear().range([chartHeight, 0])
+                var xAxis = d3.svg.axis().scale(x).orient("bottom").tickFormat(xAxisFormat)
+                var yAxis = d3.svg.axis().scale(y).orient("left")
+
+                var chart = svg.append("g")
+                    .attr("width", progressBarWidth + 40).attr("height", chartHeight + 40)
+                    .append("g").attr("transform", "translate(40,20)");
+
+                var timeExtent = d3.extent(originalData, function(d) {
+                    return d['starttime'];
+                })
+                var timeBins = d3.time.hours(d3.time.hour.offset(timeExtent[0], -1),
+                    d3.time.hour.offset(timeExtent[1], 1));
+                var binByHour = d3.layout.histogram().value(function(d) {
+                    return d['starttime'];
+                }).bins(timeBins)
+                var histData = binByHour(originalData)
+                x.domain(d3.extent(timeBins))
+                y.domain([0, d3.max(histData, function(d) {
+                    return d.y;
+                })])
+                chart.selectAll(".bar").data(histData).enter().append("rect")
+                    .style("fill", "steelblue").attr("x", function(d) {
+                        return x(d.x)
+                    })
+                    .attr("width", 10).attr("y", function(d) {
+                        return y(d.y)
+                    })
+                    .attr("height", function(d) {
+                        return chartHeight - y(d.y)
+                    })
+
+                chart.append('g')
+                    .attr("transform", "translate(0," + (chartHeight) + ")")
+                    .call(xAxis)
+                    .select("path")
+                    .attr("class", "axis")
+                    .attr("stroke", "black")
+                    .attr("fill", "none");
+
+                chart.append("g")
+                    .attr("transform", "translate(0,0)")
+                    .call(yAxis)
+                    .select("path")
+                    .attr("class", "axis")
+                    .attr("stroke", "black")
+                    .attr("fill", "none");
+
+                chart.selectAll(".tick").select("line").attr("stroke-width", 1)
+                    .attr("stroke", "black")
+
+                var progressController = svg.append("rect").attr("x", 40)
+                    .attr("y", chartHeight + 10)
+                    .attr("width", progressControllerWidth).attr("height", 20)
+                    .style("fill", "gray")
+                    .attr("id", "progressController");
+
+                function getProgressControllerRange(startX, timeDomain) {
+                    return d3.time.scale.utc().domain(timeDomain)
+                        .range([startX, progressBarWidth + 40 - progressControllerWidth]);
+                }
+
+                function getTimeDomain(data) {
+                    var timeExtent = d3.extent(data, function(d) {
+                        return d['starttime']
+                    });
+                    var timeDomain = [timeExtent[0], timeExtent[1]];
+                    return timeDomain
+                }
+
+                function animateData(data) {
+                    var timeDomain = getTimeDomain(data)
+                    var timeRangeHigh = Math.abs(timeDomain[1] - timeDomain[0]) * timeRangeFactor
+                    var timeRange = d3.time.scale.utc().domain(timeDomain).range([0, timeRangeHigh]);
+
+                    var progressControllerRange = getProgressControllerRange(progressController.attr("x"), timeDomain);
+                    var progressControllerTicks = progressControllerRange
+                        .ticks(d3.time.minute, 5);
+
+                    progressControllerTicks.forEach(function(d) {
+                        progressController.transition().duration(300).delay(timeRange(d))
+                            .attr("x", progressControllerRange(d) + progressControllerWidth)
+                    })
+
+                    data.forEach(function(d) {
+                        var selectionString = "#line" + originalData.indexOf(d)
+                        var totalLength = d3.select(selectionString).node().getTotalLength();
+
+                        d3.select(selectionString).attr("stroke-dasharray", totalLength + " " + totalLength)
+                            .attr("stroke-dashoffset", totalLength)
+                            .style("opacity", "1")
+                            .style("stroke", "steelblue")
+                            .transition()
+                            .duration(500)
+                            .delay(timeRange(d['starttime']))
+                            .ease("quad")
+                            .attr("stroke-dashoffset", 0)
+                            .style("stroke-width", 1)
+                            .transition()
+                            .duration(300)
+                            .style("opacity", 0)
+                    })
+                }
+
+                setTimeout(function() {
+                    animateData(originalData)
+                }, 300)
+
+                function clampDragValue(drag) {
+                    if (drag < 40)
+                        return 40;
+                    return d3.min([d3.event.x, progressBarWidth + 40]);
+                }
+
+                setTimeout(function() {
+                    dragBehavior = d3.behavior.drag();
+                    progressController = d3.selectAll("#progressController");
+                    dragBehavior.on("dragstart", function() {
+                        d3.event.sourceEvent.stopPropagation();
+                    });
+                    dragBehavior.on("drag", function() {
+                        progressController.attr("x", clampDragValue(d3.event.x))
+                        var progressRangeFull = getProgressControllerRange(0, getTimeDomain(originalData));
+                        var minDate = progressRangeFull.invert([progressController.attr("x")])
+                        var filteredData = originalData.filter(function(d) {
+                            return Math.abs(d['starttime'].getTime() - minDate.getTime()) <= 5 * 60 * 1000;
+                        });
+                        g.selectAll("path").style("opacity", 0);
+                        filteredData.forEach(function(d) {
+                            g.select("#line" + originalData.indexOf(d)).style("opacity", 1)
+                        })
+                    });
+                    progressController.call(dragBehavior)
+                }, totalAnimationTime + 1000)
+            })
+        }
     </script>
 </body>
 
