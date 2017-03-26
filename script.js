@@ -262,9 +262,8 @@ function drawPaths(fileName) {
             .ticks(d3.time.minute, 5);
 
         progressControllerTicks.forEach(function(d) {
-            console.log(timeRange())
             progressController.transition().duration(300).delay(timeRange(d))
-                .attr('transform', "translate("+progressControllerRange(d)+",0)");
+                .attr('x', progressControllerRange(d));
           });
 
         data.forEach(function(d) {
@@ -305,7 +304,7 @@ function drawPaths(fileName) {
               d3.event.sourceEvent.stopPropagation();
             });
           dragBehavior.on('drag', function() {
-              progressController.attr('x', clampDragValue(d3.event.x));
+              progressController.attr('x', clampDragValue(d3.event.x))
               let progressRangeFull = getProgressControllerRange(0, getTimeDomain(originalData));
               let minDate = progressRangeFull.invert([progressController.attr('x')]);
               let filteredData = originalData.filter(function(d) {
