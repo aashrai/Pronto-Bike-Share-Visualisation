@@ -1,5 +1,9 @@
-let mapboxTiles = L.tileLayer('https://api.mapbox.com/styles/v1/aashrai/cj0ig5xgr00gj2srl2y632rmr/tiles/256/{z}/{x}/{y}?access_token=pk.eyJ1IjoiYWFzaHJhaSIsImEiOiJjaXp2Z2N2NWswMTI2MzNuaDdtMHE3MHEyIn0.2Y4IHW4OXer-0xb8LtxuWA', {
-    attribution: '<a href="http://www.mapbox.com/about/maps/" target="_blank">Terms &amp; Feedback</a>',
+let mapboxTiles = L.tileLayer('https://api.mapbox.com/styles/v1/aashrai/'+
+'cj0ig5xgr00gj2srl2y632rmr/tiles/256/{z}/{x}/{y}?access_token=pk.eyJ1IjoiY'+
+'WFzaHJhaSIsImEiOiJjaXp2Z2N2NWswMTI2MzNuaDdtMHE3MHEyIn0.2Y4IHW4OXer-0xb8Lt'+
+'xuWA', {
+    attribution: '<a href="http://www.mapbox.com/about/maps/"target="_blank">'+
+    'Terms &amp; Feedback</a>',
   });
 
 let map = L.map('map', {
@@ -12,7 +16,7 @@ mapboxTiles.on('load', function() {
     setTimeout(function() {
         drawStations();
         drawHeader();
-        drawPaths('trip_date_max.csv');
+        drawPaths('trip_date_max.csv','Peaks during office hours, Morning and Evening');
       }, 600);
   });
 
@@ -69,7 +73,7 @@ function setClickEventsForButton(button) {
       'click': function() {
           let id = '#' + button.attr('id');
           makeSelectedBackgroundVisible(id);
-          drawPaths(getFileName(id));
+          drawPaths(getFileName(id), getTileText(id));
         },
       'mouseover': function(d) {
           d3.select(this).style('cursor', 'pointer');
@@ -134,7 +138,13 @@ function getFileName(id) {
   return 'trip_date_max.csv';
 }
 
-function drawPaths(fileName) {
+function getTileText(id){
+  if (id == '#weekendButton')
+      return "Peaks during Afternoon"
+  return "Peaks during office hours, Morning and Evening"
+}
+
+function drawPaths(fileName, tileText) {
   d3.csv(fileName, function(d) {
       let obj = {
           'starttime': timeFormat.parse(d['starttime']),
@@ -187,6 +197,13 @@ function drawPaths(fileName) {
           .attr('width', chartWidth)
           .attr('height', chartHeight + chartMargin)
           .append('g');
+
+      let tile = chart
+            .append('text')
+            .style("fill","white")
+            .text(tileText)
+      let tileMargin = (chartWidth - tile.node().getBBox().width)/2;
+      tile.attr("transform","translate(" + tileMargin + "," + (chartHeight + 35) + ")")
 
       let timeExtent = d3.extent(originalData, function(d) {
           return d['starttime'];
@@ -304,7 +321,7 @@ function drawPaths(fileName) {
               d3.event.sourceEvent.stopPropagation();
             });
           dragBehavior.on('drag', function() {
-              progressController.attr('x', clampDragValue(d3.event.x))
+              progressController.attr('x', clampDragValue(d3.event.x));
               let progressRangeFull = getProgressControllerRange(0, getTimeDomain(originalData));
               let minDate = progressRangeFull.invert([progressController.attr('x')]);
               let filteredData = originalData.filter(function(d) {
